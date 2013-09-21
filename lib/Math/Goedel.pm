@@ -7,9 +7,9 @@ use Exporter qw/import/;
 
 our @EXPORT_OK = qw/goedel/;
 
-use Math::Prime::XS qw/is_prime/;
-use List::Util qw/reduce max/;
-use List::MoreUtils qw/pairwise/;
+#use Math::Prime::XS qw/is_prime/;
+use Math::Prime::Util qw/nth_prime/;
+use Math::BigInt try => q/GMP,Pari/;
 use Carp;
 
 =head1 NAME
@@ -18,7 +18,7 @@ Math::Goedel - Fundamental Goedel number calculator
 
 =cut
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 =head1 SYNOPSIS
 
@@ -32,6 +32,7 @@ our $VERSION = '0.03';
 
   goedel(9, offset => 1); # 1024 (2**(9+1))
   goedel(81, reverse => 1); # 13112 (2**1 * 3**8)
+  goedel(4999, bigint => 1); # 24821251455656250000 as BigInt (2**1 * 3**9 * 5**9 * 7**9)
 
 =head1 DESCRIPTION
 
@@ -83,64 +84,43 @@ so,
   goedel(23,  reverse => 1); # 2**3 * 3**2 == 72
   goedel(230, reverse => 1); # 2**0 * 3**3 * 5**2 == 675
 
+=head4 bigint => 0|1
+
+This option is used to force result goedel numbers to be L<Math::BigInt>.
 =cut
 
-#sub _pow
-#{
-#  $_[0]**$_[1];
-#}
-#memoize('_pow', NORMALIZER => sub {join ':', @_}, LIST_CACHE=>q/FAULT/);
-
-my %_pow_cache = ();
-my $_next_prime = sub
-{
-  my ($m, $offset) = @_;
-  ++$m;
-  while ( 1 ) {
-    last if is_prime($m);
-  }
-  continue {
-    ++$m;
-  }
-  $m => [map { $m ** ($_+$offset) } 0 .. 9];
-};
-
 sub goedel {
-  my $n_ = shift;
+  my $n = shift;
   my %opts = (
-    q/offset/ => 0,
-    q/reverse/ => 0,
+    offset => 0,
+    reverse => 0,
+    bigint => 0,
     @_ );
-  
-  my $n = -1;
+
   croak "n should be a non-negative integer"
-  if ( $n_ ne ($n = 0 + sprintf '%ld', $n_) || $n_ < 0);
+    if $n eq '' || $n =~ tr/0123456789//c;
 
-  my $offset = -1;
+  my $offset = $opts{'offset'};
   croak "offset should be a non-negative integer"
-  if ( $opts{q/offset/} ne ($offset = 0 + sprintf('%ld', $opts{q/offset/})) ||
-       $offset < 0);
+    if $offset eq '' || $offset =~ tr/0123456789//c;
 
+  my $one = do {
+    if ($opts{'bigint'}) {
+      Math::BigInt->bone;
+    }
+    else {
+      $n - $n + 1;
+    }
+  };
+  my $g = $one;
 
-  my $nlen = length($n);
-
-  $_pow_cache{$offset} = {} if !exists $_pow_cache{$offset};
-  my $pow_cache_ = $_pow_cache{$offset};
-
-  while ( scalar(keys %$pow_cache_) < $nlen ) {
-    my @cache_ = $_next_prime->(
-      (%$pow_cache_) ? (max keys %$pow_cache_) : 1,
-      $offset);
-    $pow_cache_->{$cache_[0]} = $cache_[1];
+  # from here, $n is treated just as string of digits
+  #$n = "$n";
+  $n = reverse $n if $opts{'reverse'};
+  foreach my $i (1 .. length($n)) {
+    $g *= ($one * nth_prime($i)) ** (substr($n, $i-1, 1)+$offset);
   }
-
-  my @primes_ = (sort keys %$pow_cache_)[0 .. $nlen-1];
-  my @digits_ = split //, $n;
-  @digits_ = reverse @digits_ if ($opts{q/reverse/});
-
-  reduce { $a * $b }
-  pairwise { $pow_cache_->{$a}[$b] }
-  @primes_, @digits_;
+  $g;
 }
 
 =head2 enc($n)
@@ -164,6 +144,10 @@ L<http://ja.doukaku.org/comment/4657/>, L<http://ja.doukaku.org/comment/4661/>
 =head1 AUTHOR
 
 KATOU Akira (turugina), C<< <turugina at cpan.org> >>
+
+=head1 CONTRIBUTERS
+
+DANAJ
 
 =head1 BUGS
 

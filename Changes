@@ -16,3 +16,7 @@ Revision history for Math-Goedel
         - append test case t/80_performance.t (for myself)
         - change my e-mail address (use cpan.org)
 
+0.04    2013-09-21
+        - fix rt#88842, simplify code (great thanks to DANAJ)
+        - add 'bigint' option
+
